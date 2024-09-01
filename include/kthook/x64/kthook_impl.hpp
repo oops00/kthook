@@ -483,6 +483,7 @@ private:
 #else
             jump_gen->add(rsp, 32);
 #endif
+            jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.rax)], rax);
             // push original return address and return
             jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&last_return_address)]);
             jump_gen->push(rax);
@@ -810,6 +811,7 @@ private:
 #else
             jump_gen->add(rsp, 32);
 #endif
+            jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.rax)], rax);
             // push original return address and return
             jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&last_return_address)]);
             jump_gen->push(rax);
