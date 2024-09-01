@@ -1028,9 +1028,9 @@ private:
         jump_gen->pushad();
         jump_gen->mov(esp, ptr[&last_return_address]);
         jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.flags)], esp);
-        jump_gen->sub(esp, sizeof(cpu_ctx::eflags));
-        jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.esp)], esp);
         jump_gen->add(esp, sizeof(cpu_ctx::eflags));
+        jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.esp)], esp);
+        jump_gen->sub(esp, sizeof(cpu_ctx::eflags));
         jump_gen->mov(eax, ret_addr);
 
         jump_gen->mov(dword[reinterpret_cast<std::uintptr_t>(&last_return_address)], info.hook_address);
@@ -1073,7 +1073,7 @@ private:
         jump_gen->mov(esp, reinterpret_cast<std::uintptr_t>(&context.edi));
         jump_gen->popad();
         jump_gen->mov(esp, ptr[reinterpret_cast<std::uintptr_t>(&context.esp)]);
-        jump_gen->add(esp, sizeof(cpu_ctx::eflags));
+        jump_gen->sub(esp, sizeof(cpu_ctx::eflags));
         jump_gen->popfd();
         jump_gen->jmp(ptr[&last_return_address]);
 
@@ -1096,7 +1096,7 @@ private:
         jump_gen->mov(esp, reinterpret_cast<std::uintptr_t>(&context.edi));
         jump_gen->popad();
         jump_gen->mov(esp, ptr[reinterpret_cast<std::uintptr_t>(&context.esp)]);
-        jump_gen->add(esp, sizeof(cpu_ctx::eflags));
+        jump_gen->sub(esp, sizeof(cpu_ctx::eflags));
         jump_gen->popfd();
         jump_gen->jmp(ptr[&last_return_address]);
         jump_gen->L(skip_bytes);
