@@ -1,6 +1,13 @@
 #ifndef KTHOOK_IMPL_HPP_
 #define KTHOOK_IMPL_HPP_
 
+#ifdef _MSC_VER
+#include <xmmintrin.h>
+#define M128 __m128
+#else
+#define M128 __float128
+#endif
+
 namespace kthook {
 #pragma pack(push, 1)
 struct cpu_ctx {
@@ -207,6 +214,108 @@ inline bool create_trampoline(std::uintptr_t hook_address,
     return true;
 }
 } // namespace detail
+
+enum class XMM: unsigned {
+    XMM0,
+    XMM1,
+    XMM2,
+    XMM3,
+    XMM4,
+    XMM5,
+    XMM6,
+    XMM7,
+    XMM8,
+    XMM9,
+    XMM10,
+    XMM11,
+    XMM12,
+    XMM13,
+    XMM14,
+    XMM15
+};
+
+enum class ST: unsigned {
+    ST0,
+    ST1,
+    ST2,
+    ST3,
+    ST4,
+    ST5,
+    ST6,
+    ST7
+};
+
+enum class MM: unsigned {
+    MM0,
+    MM1,
+    MM2,
+    MM3,
+    MM4,
+    MM5,
+    MM6,
+    MM7
+};
+
+#pragma pack(push, 1)
+struct cpu_ctx_x87 {
+public:
+    std::uint16_t FCW{};
+    std::uint16_t FSW{};
+    std::uint8_t FTW{};
+private:
+    std::uint8_t reserved1{};
+public:
+    std::uint16_t FOP{};
+    std::uint64_t FIP{};
+    std::uint64_t FDP{};
+    std::uint32_t MXCSR{};
+    std::uint32_t MXCSR_MASK{};
+
+private:
+    struct fp_reg {
+        double value;
+        std::uint64_t reserved;
+    };
+
+    std::array<fp_reg, 8> ST_regs{};
+
+    std::array<M128, 16> XMM_regs{};
+
+    std::array<M128, 3> reserved4{};
+    std::array<M128, 3> available1{};
+
+public:
+    template <MM R>
+    [[nodiscard]] double reg() const noexcept {
+        return ST_regs[static_cast<unsigned>(R)].value;
+    }
+
+    template <MM R>
+    void set_reg(double v) noexcept {
+        ST_regs[static_cast<unsigned>(R)].value = v;
+    }
+
+    template <ST R>
+    [[nodiscard]] double reg() const noexcept {
+        return ST_regs[static_cast<unsigned>(R)].value;
+    }
+
+    template <ST R>
+    void set_reg(double v) noexcept {
+        ST_regs[static_cast<unsigned>(R)].value = v;
+    }
+
+    template <XMM R>
+    [[nodiscard]] M128 reg() const noexcept {
+        return XMM_regs[static_cast<unsigned>(R)];
+    }
+
+    template <XMM R>
+    void set_reg(M128 v) noexcept {
+        XMM_regs[static_cast<unsigned>(R)] = v;
+    }
+};
+#pragma pack(pop)
 
 enum kthook_option {
     kNone = 0,
@@ -483,6 +592,7 @@ private:
 #else
             jump_gen->add(rsp, 32);
 #endif
+            jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.rax)], rax);
             // push original return address and return
             jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&last_return_address)]);
             jump_gen->push(rax);
@@ -810,6 +920,7 @@ private:
 #else
             jump_gen->add(rsp, 32);
 #endif
+            jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.rax)], rax);
             // push original return address and return
             jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&last_return_address)]);
             jump_gen->push(rax);
@@ -985,11 +1096,15 @@ public:
     void set_dest(void* address) { set_dest(reinterpret_cast<std::uintptr_t>(address)); }
 
     cpu_ctx& get_context() const { return context; }
+    cpu_ctx_x87& get_x87_context() const { return context_x87; }
     std::uintptr_t& get_return_address() const { return last_return_address; }
 
 private:
     const std::uint8_t* generate_relay_jump() {
         using namespace Xbyak::util;
+
+        static const std::uint8_t fxsave_code[] = {0x0f, 0xae, 0x00}; // fxsave [rax]
+        static const std::uint8_t fxrstor_code[] = {0x0f, 0xae, 0x08}; // fxrstor [rax]
 
         auto hook_address = info.hook_address;
 
@@ -1003,6 +1118,11 @@ private:
         jump_gen->pushfq();
 
         jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&context.rax)], rax);
+
+        // saving x87 registers
+        jump_gen->mov(rax, reinterpret_cast<std::uintptr_t>(&context_x87));
+        jump_gen->db(fxsave_code, sizeof(fxsave_code));
+
         jump_gen->mov(rax, rsp);
         jump_gen->mov(ptr[reinterpret_cast<std::uintptr_t>(&last_return_address)], rax);
         jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&context.rax)]);
@@ -1074,6 +1194,10 @@ private:
         jump_gen->pop(r14);
         jump_gen->pop(r15);
 
+        // restoring x87 registers
+        jump_gen->mov(rax, reinterpret_cast<std::uintptr_t>(&context_x87));
+        jump_gen->db(fxrstor_code, sizeof(fxrstor_code));
+
         jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&context.rsp)]);
         jump_gen->mov(rsp, rax);
         jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&last_return_address)]);
@@ -1108,6 +1232,10 @@ private:
         jump_gen->pop(r13);
         jump_gen->pop(r14);
         jump_gen->pop(r15);
+
+        // restoring x87 registers
+        jump_gen->mov(rax, reinterpret_cast<std::uintptr_t>(&context_x87));
+        jump_gen->db(fxrstor_code, sizeof(fxrstor_code));
 
         jump_gen->mov(rax, ptr[reinterpret_cast<std::uintptr_t>(&context.rsp)]);
         jump_gen->mov(rsp, rax);
@@ -1194,6 +1322,7 @@ private:
 
     mutable std::uintptr_t last_return_address{0};
     mutable cpu_ctx context{};
+    mutable cpu_ctx_x87 context_x87{};
 
     std::unique_ptr<Xbyak::CodeGenerator> jump_gen;
     std::unique_ptr<Xbyak::CodeGenerator> trampoline_gen;
