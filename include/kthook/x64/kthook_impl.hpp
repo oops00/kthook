@@ -215,7 +215,7 @@ inline bool create_trampoline(std::uintptr_t hook_address,
 }
 } // namespace detail
 
-enum XMM: unsigned {
+enum class XMM: unsigned {
     XMM0,
     XMM1,
     XMM2,
@@ -234,7 +234,7 @@ enum XMM: unsigned {
     XMM15
 };
 
-enum ST: unsigned {
+enum class ST: unsigned {
     ST0,
     ST1,
     ST2,
@@ -245,7 +245,7 @@ enum ST: unsigned {
     ST7
 };
 
-enum MM: unsigned {
+enum class MM: unsigned {
     MM0,
     MM1,
     MM2,
